@@ -2,6 +2,7 @@ import { saveToLocalStorage } from './state.js';
 import { CLASS_DEFINITIONS } from './characters/classes.js';
 import { DEFAULT_WORLD_DATA, getRoomExits } from './map.js';
 import { getCategorizedInventory, getEquipmentDisplay, getItemDetails, INVENTORY_SCREENS, EQUIPMENT_SLOTS } from './inventory.js';
+import { getEffectiveCombatStats, getEquipmentBonusDisplay, hasEquipmentBonuses } from './combat/equipment-bonuses.js';
 import { getCurrentLevelUp, getStatDiffs, formatStatName, xpForNextLevel } from './level-up.js';
 import { getNPCsInRoom, getCurrentDialogLine, getDialogProgress } from './npc-dialog.js';
 import { getActiveQuestsSummary, getAvailableQuestsInRoom } from './quest-integration.js';
@@ -208,7 +209,13 @@ export function render(state, dispatch) {
           <div class="kv">
             <div>HP</div><div><b>${hpLine(state.player)}</b></div>
             <div>MP</div><div><b>${state.player.mp ?? 0} / ${state.player.maxMp ?? 0}</b></div>
-            <div>ATK / DEF</div><div><b>${state.player.atk}</b> / <b>${state.player.def}</b></div>
+            <div>ATK / DEF</div><div><b>${(() => {
+              const eqStats = getEffectiveCombatStats(state.player);
+              const eqBon = getEquipmentBonusDisplay(state.player);
+              const atkStr = eqBon.attack ? eqStats.atk + ' <span style="color:#4f4">(+' + eqBon.attack + ')</span>' : '' + state.player.atk;
+              const defStr = eqBon.defense ? eqStats.def + ' <span style="color:#4f4">(+' + eqBon.defense + ')</span>' : '' + state.player.def;
+              return atkStr + ' / ' + defStr;
+            })()}</b></div>
             <div>Defending</div><div><b>${state.player.defending ? 'Yes' : 'No'}</b></div>
             <div>Status</div><div><b>${(state.player.statusEffects ?? []).map(e => e.name).join(', ') || 'None'}</b></div>
             <div>Potions</div><div><b>${state.player.inventory.potion ?? 0}</b></div>

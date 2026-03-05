@@ -6,6 +6,7 @@ import { getAbility, getAbilityDisplayInfo } from './combat/abilities.js';
 import { calculateDamage, calculateHeal, getElementMultiplier } from './combat/damage-calc.js';
 import { StatusEffect } from './combat/status-effects.js';
 import { selectEnemyAction, executeEnemyAbility } from './enemy-abilities.js';
+import { getEffectiveCombatStats } from './combat/equipment-bonuses.js';
 
 // Minimal deterministic RNG (Park-Miller LCG)
 export function nextRng(seed) {
@@ -143,8 +144,10 @@ export function playerAttack(state) {
     return { ...state, phase: 'enemy-turn' };
   }
 
+  // Apply equipment bonuses to player's attack stat
+  const playerStats = getEffectiveCombatStats(state.player);
   const damage = computeDamage({
-    attackerAtk: state.player.atk,
+    attackerAtk: playerStats.atk,
     targetDef: state.enemy.def,
     targetDefending: state.enemy.defending,
   });
@@ -256,8 +259,10 @@ export function playerUseAbility(state, abilityId) {
     // Damage ability targeting enemy
     if (ability.power > 0) {
       const abilityElement = ability.element ?? 'physical';
+      // Apply equipment bonuses to player's attack stat for abilities
+      const abilityPlayerStats = getEffectiveCombatStats(state.player);
       const { damage, critical } = calculateDamage({
-        attackerAtk: state.player.atk,
+        attackerAtk: abilityPlayerStats.atk,
         targetDef: state.enemy.def,
         targetDefending: state.enemy.defending,
         element: abilityElement,
@@ -451,9 +456,11 @@ export function enemyAct(state) {
     state = { ...state, turn: state.turn + 1 };
     state = applyVictoryDefeat(state);
   } else if (result.action === 'attack') {
+    // Apply equipment bonuses to player's defense stat
+    const defenderStats = getEffectiveCombatStats(state.player);
     const damage = computeDamage({
       attackerAtk: state.enemy.atk,
-      targetDef: state.player.def,
+      targetDef: defenderStats.def,
       targetDefending: state.player.defending,
     });
 
