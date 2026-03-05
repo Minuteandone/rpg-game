@@ -320,6 +320,46 @@ export function render(state, dispatch) {
     }
   }
 
+  if (state.phase === 'battle-summary') {
+    const bs = state.battleSummary ?? {};
+    const hasLevelUps = bs.levelUps && bs.levelUps.length > 0;
+    const lootedItems = bs.lootedItems ?? [];
+    const levelUpLines = (bs.levelUps ?? []).map(lu => {
+      const name = lu.memberName ?? lu.name ?? 'Unknown';
+      return esc(name) + ' reached level ' + lu.newLevel + '! ⭐';
+    });
+    const lootHtml = lootedItems.length > 0
+      ? lootedItems.map(item => {
+          const n = typeof item === 'string' ? item : (item.name ?? item.id ?? 'Item');
+          return '<div>📦 ' + esc(n) + '</div>';
+        }).join('')
+      : '<div><em>No items looted.</em></div>';
+    const levelUpHtml = hasLevelUps
+      ? levelUpLines.map(l => '<div class="good">⭐ ' + l + '</div>').join('')
+      : '';
+    hud.innerHTML = `
+      <div class="row">
+        <div class="card">
+          <h2 class="good">⚔️ Battle Won!</h2>
+          <div class="kv">
+            <div>Defeated</div><div><b>${esc(bs.enemyName ?? 'Unknown')}</b></div>
+            <div>XP Gained</div><div><b class="good">+${bs.xpGained ?? 0}</b></div>
+            <div>Gold Earned</div><div><b class="good">+${bs.goldGained ?? 0}</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Loot</h2>
+          ${lootHtml}
+          ${levelUpHtml ? '<h3 class="good">Level Up!</h3>' + levelUpHtml : ''}
+        </div>
+      </div>
+    `;
+    actions.innerHTML = '<div class="buttons"><button id="btnContinueAfterBattle">Continue →</button></div>';
+    document.getElementById('btnContinueAfterBattle').onclick = () => dispatch({ type: 'CONTINUE_AFTER_BATTLE' });
+    log.innerHTML = state.log.slice().reverse().map(line => '<div class="logLine">' + esc(line) + '</div>').join('');
+    return;
+  }
+
     // --- Victory Phase ---
   if (state.phase === 'victory') {
     const xpGained = state.xpGained ?? 0;

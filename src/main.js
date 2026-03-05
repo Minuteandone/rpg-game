@@ -10,6 +10,7 @@ import { checkLevelUps, createLevelUpState, advanceLevelUp, getCurrentLevelUp } 
 import { calcLevel } from './characters/stats.js';
 import { getNPCsInRoom, createDialogState, advanceDialog } from './npc-dialog.js';
 import { initQuestState, acceptQuest, onRoomEnter, getAvailableQuestsInRoom, getActiveQuestsSummary } from './quest-integration.js';
+import { createBattleSummary } from './battle-summary.js';
 
 const ENCOUNTER_RATE = 0.3; // 30% chance per move
 const ROOM_ID_MAP = [['nw', 'n', 'ne'], ['w', 'center', 'e'], ['sw', 's', 'se']];
@@ -51,6 +52,11 @@ function setState(next) {
         }
       }
     }
+  }
+
+  // After level-up detection, transition victory → battle-summary
+  if (next.phase === 'victory' && state.phase !== 'battle-summary' && state.phase !== 'level-up') {
+    next = { ...next, phase: 'battle-summary', battleSummary: createBattleSummary(next) };
   }
 
   state = next;
@@ -198,13 +204,48 @@ function dispatch(action) {
     if (done) {
       // All level-ups viewed, return to victory phase
       const returnPhase = state.levelUpState.returnPhase || 'victory';
+      if (returnPhase === 'battle-summary-done') {
+        const exits = getAvailableExits(state.world);
+        let next2 = {
+          ...state,
+          phase: 'exploration',
+          player: { ...state.player, defending: false },
+          battleSummary: undefined,
+          levelUpState: undefined,
+          pendingLevelUps: undefined,
+        };
+        next2 = pushLog(next2, 'You gather yourself and continue your journey.');
+        next2 = pushLog(next2, `${getRoomDescription(state.world)} Exits: ${exits.join(', ') || 'none'}.`);
+        return setState(next2);
+      }
       return setState({ ...state, phase: returnPhase, levelUpState: undefined });
     }
     return setState({ ...state, levelUpState: nextLuState });
   }
 
+  if (type === 'CONTINUE_AFTER_BATTLE') {
+    if (state.phase !== 'battle-summary') return;
+    // If there are pending level-ups, go to level-up phase
+    if (state.pendingLevelUps && state.pendingLevelUps.length > 0) {
+      const luState = createLevelUpState(state.pendingLevelUps, 'battle-summary-done');
+      return setState({ ...state, phase: 'level-up', levelUpState: luState });
+    }
+    // Otherwise go straight to exploration
+    const exits = getAvailableExits(state.world);
+    let next = {
+      ...state,
+      phase: 'exploration',
+      player: { ...state.player, defending: false },
+      battleSummary: undefined,
+      pendingLevelUps: undefined,
+    };
+    next = pushLog(next, 'You gather yourself and continue your journey.');
+    next = pushLog(next, `${getRoomDescription(state.world)} Exits: ${exits.join(', ') || 'none'}.`);
+    return setState(next);
+  }
+
   if (type === 'CONTINUE_EXPLORING') {
-    if (state.phase !== 'victory' && state.phase !== 'post-victory') return;
+    if (state.phase !== 'victory' && state.phase !== 'post-victory' && state.phase !== 'battle-summary-done') return;
     const exits = getAvailableExits(state.world);
     let next = {
       ...state,
