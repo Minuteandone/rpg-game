@@ -2,6 +2,7 @@ import { characters } from './data/characters.js';
 import { createCharacter } from './characters/character.js';
 import { CLASS_DEFINITIONS } from './characters/classes.js';
 import { getEncounter, getEnemy } from './data/enemies.js';
+import { createWorldState } from './map.js';
 
 export function initialState() {
   const playerBase = characters.player;
@@ -33,6 +34,7 @@ export function initialState() {
       `A wild ${enemyBase.name} appears.`,
       `Your turn.`,
     ],
+    world: createWorldState(),
   };
 }
 
@@ -83,6 +85,7 @@ export function initialStateWithClass(classId) {
       `A wild ${enemyBase.name} appears.`,
       `Your turn.`,
     ],
+    world: createWorldState(),
   };
 }
 
