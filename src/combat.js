@@ -1,6 +1,10 @@
 import { clamp, pushLog } from './state.js';
 import { items } from './data/items.js';
+import { removeItemFromInventory, hasItem } from './items.js';
 import { getEnemy, getEncounter } from './data/enemies.js';
+import { getAbility, getAbilityDisplayInfo } from './combat/abilities.js';
+import { calculateDamage, calculateHeal, getElementMultiplier } from './combat/damage-calc.js';
+import { StatusEffect } from './combat/status-effects.js';
 
 // Minimal deterministic RNG (Park-Miller LCG)
 export function nextRng(seed) {
@@ -14,6 +18,69 @@ function computeDamage({ attackerAtk, targetDef, targetDefending }) {
   const defendBonus = targetDefending ? 3 : 0;
   const raw = attackerAtk - (targetDef + defendBonus);
   return Math.max(1, raw);
+}
+
+function isStunned(entity) {
+  return (entity.statusEffects ?? []).some(
+    (effect) => effect.type === 'stun' && effect.duration >= 0
+  );
+}
+
+export function addStatusEffect(state, targetKey, effect) {
+  const target = state[targetKey];
+  if (!target) return state;
+  const statusEffects = target.statusEffects ?? [];
+  return {
+    ...state,
+    [targetKey]: { ...target, statusEffects: [...statusEffects, { ...effect }] },
+  };
+}
+
+function processTurnStart(state, actorKey) {
+  const actor = state[actorKey];
+  if (!actor) return state;
+
+  let nextState = state;
+  const actorName = actorKey === 'player' ? 'You' : state.enemy.name;
+  const actorPossessive = actorKey === 'player' ? 'Your' : `${state.enemy.name}'s`;
+  let hp = actor.hp;
+  const remainingEffects = [];
+
+  for (const effect of actor.statusEffects ?? []) {
+    const duration = effect.duration ?? 0;
+    if (duration <= 0) {
+      nextState = pushLog(nextState, `${actorPossessive} ${effect.type} wears off.`);
+      continue;
+    }
+
+    const verb = actorKey === 'player' ? 'take' : 'takes';
+    const healVerb = actorKey === 'player' ? 'regain' : 'regains';
+
+    if (effect.type === 'poison' || effect.type === 'burn') {
+      const damage = Math.max(0, effect.power ?? 0);
+      if (damage > 0) {
+        hp = clamp(hp - damage, 0, actor.maxHp);
+        const source = effect.type === 'poison' ? 'poison' : 'burn';
+        nextState = pushLog(nextState, `${actorName} ${verb} ${damage} ${source} damage.`);
+      }
+    } else if (effect.type === 'regen') {
+      const heal = Math.max(0, effect.power ?? 0);
+      if (heal > 0) {
+        hp = clamp(hp + heal, 0, actor.maxHp);
+        nextState = pushLog(nextState, `${actorName} ${healVerb} ${heal} HP.`);
+      }
+    }
+
+    const newDuration = duration - 1;
+    remainingEffects.push({ ...effect, duration: newDuration });
+  }
+
+  nextState = {
+    ...nextState,
+    [actorKey]: { ...actor, hp, statusEffects: remainingEffects },
+  };
+
+  return applyVictoryDefeat(nextState);
 }
 
 function applyVictoryDefeat(state) {
@@ -49,6 +116,7 @@ export function startNewEncounter(state, zoneLevel = 1) {
     hp: enemyBase.maxHp ?? enemyBase.hp,
     maxHp: enemyBase.maxHp ?? enemyBase.hp,
     defending: false,
+    statusEffects: [],
   };
 
   let next = {
@@ -56,7 +124,7 @@ export function startNewEncounter(state, zoneLevel = 1) {
     enemy,
     phase: 'player-turn',
     turn: 1,
-    player: { ...state.player, defending: false },
+    player: { ...state.player, defending: false, statusEffects: [] },
   };
 
   next = pushLog(next, `A wild ${enemy.name} appears.`);
@@ -66,6 +134,13 @@ export function startNewEncounter(state, zoneLevel = 1) {
 
 export function playerAttack(state) {
   if (state.phase !== 'player-turn') return state;
+
+  if (isStunned(state.player)) {
+    state = pushLog(state, 'Player is stunned!');
+    state = processTurnStart(state, 'enemy');
+    if (state.phase === 'victory' || state.phase === 'defeat') return state;
+    return { ...state, phase: 'enemy-turn' };
+  }
 
   const damage = computeDamage({
     attackerAtk: state.player.atk,
@@ -78,26 +153,43 @@ export function playerAttack(state) {
     ...state,
     enemy: { ...state.enemy, hp: enemyHp, defending: false },
     player: { ...state.player, defending: false },
-    phase: 'enemy-turn',
   };
 
   state = pushLog(state, `You strike for ${damage} damage.`);
-  return applyVictoryDefeat(state);
+  state = applyVictoryDefeat(state);
+  if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  state = processTurnStart(state, 'enemy');
+  if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  return { ...state, phase: 'enemy-turn' };
 }
 
 export function playerDefend(state) {
   if (state.phase !== 'player-turn') return state;
+  if (isStunned(state.player)) {
+    state = pushLog(state, 'Player is stunned!');
+    state = processTurnStart(state, 'enemy');
+    if (state.phase === 'victory' || state.phase === 'defeat') return state;
+    return { ...state, phase: 'enemy-turn' };
+  }
   state = {
     ...state,
     player: { ...state.player, defending: true },
-    phase: 'enemy-turn',
   };
   state = pushLog(state, `You brace for impact.`);
-  return state;
+  state = processTurnStart(state, 'enemy');
+  if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  return { ...state, phase: 'enemy-turn' };
 }
 
 export function playerUsePotion(state) {
   if (state.phase !== 'player-turn') return state;
+
+  if (isStunned(state.player)) {
+    state = pushLog(state, 'Player is stunned!');
+    state = processTurnStart(state, 'enemy');
+    if (state.phase === 'victory' || state.phase === 'defeat') return state;
+    return { ...state, phase: 'enemy-turn' };
+  }
 
   const count = state.player.inventory.potion ?? 0;
   if (count <= 0) {
@@ -114,11 +206,213 @@ export function playerUsePotion(state) {
       defending: false,
       inventory: { ...state.player.inventory, potion: count - 1 },
     },
-    phase: 'enemy-turn',
   };
 
   state = pushLog(state, `You drink a potion and heal ${hp - (state.player.hp)} HP.`);
-  return state;
+  state = processTurnStart(state, 'enemy');
+  if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  return { ...state, phase: 'enemy-turn' };
+}
+
+export function playerUseAbility(state, abilityId) {
+  if (state.phase !== 'player-turn') return state;
+
+  const ability = getAbility(abilityId);
+  if (!ability) {
+    return pushLog(state, 'Unknown ability.');
+  }
+
+  // Check if the player actually has this ability
+  const playerAbilities = state.player.abilities ?? [];
+  if (!playerAbilities.includes(abilityId)) {
+    return pushLog(state, `You don't know ${ability.name}.`);
+  }
+
+  // Check MP
+  const currentMp = state.player.mp ?? 0;
+  if (currentMp < ability.mpCost) {
+    return pushLog(state, `Not enough MP! ${ability.name} costs ${ability.mpCost} MP. You have ${currentMp} MP.`);
+  }
+
+  // Deduct MP
+  state = {
+    ...state,
+    player: {
+      ...state.player,
+      mp: currentMp - ability.mpCost,
+      defending: false,
+    },
+  };
+
+  state = pushLog(state, `You use ${ability.name}!`);
+
+  // Get RNG value for damage calculations
+  const { seed, value: rngValue } = nextRng(state.rngSeed);
+  state = { ...state, rngSeed: seed };
+
+  // Handle by target type
+  if (ability.targetType === 'single-enemy' || ability.targetType === 'all-enemies') {
+    // Damage ability targeting enemy
+    if (ability.power > 0) {
+      const abilityElement = ability.element ?? 'physical';
+      const { damage, critical } = calculateDamage({
+        attackerAtk: state.player.atk,
+        targetDef: state.enemy.def,
+        targetDefending: state.enemy.defending,
+        element: abilityElement,
+        targetElement: state.enemy.element ?? null,
+        rngValue,
+        abilityPower: ability.power,
+      });
+
+      const enemyHp = clamp(state.enemy.hp - damage, 0, state.enemy.maxHp);
+      state = {
+        ...state,
+        enemy: { ...state.enemy, hp: enemyHp },
+      };
+      let msg = `${state.enemy.name} takes ${damage} ${abilityElement} damage!`;
+      if (critical) msg += ' Critical hit!';
+      state = pushLog(state, msg);
+    }
+
+    // Apply status effect to enemy
+    if (ability.statusEffect) {
+      state = addStatusEffect(state, 'enemy', ability.statusEffect);
+      state = pushLog(state, `${state.enemy.name} is afflicted with ${ability.statusEffect.name}!`);
+    }
+  } else if (ability.targetType === 'single-ally' || ability.targetType === 'all-allies' || ability.targetType === 'self') {
+    // Healing ability targeting player
+    if (ability.healPower > 0) {
+      const healAmount = ability.healPower;
+      const oldHp = state.player.hp;
+      const newHp = clamp(oldHp + healAmount, 0, state.player.maxHp);
+      state = {
+        ...state,
+        player: { ...state.player, hp: newHp },
+      };
+      state = pushLog(state, `You are healed for ${newHp - oldHp} HP!`);
+    }
+
+    // Apply buff/status to player
+    if (ability.statusEffect) {
+      state = addStatusEffect(state, 'player', ability.statusEffect);
+      state = pushLog(state, `You gain ${ability.statusEffect.name}!`);
+    }
+
+    // Handle purify special: remove negative status effects
+    if (ability.special === 'cleanse') {
+      const currentEffects = state.player.statusEffects ?? [];
+      const debuffTypes = ['poison', 'burn', 'stun', 'sleep', 'atk-down', 'def-down', 'spd-down'];
+      const cleaned = currentEffects.filter(e => !debuffTypes.includes(e.type));
+      state = {
+        ...state,
+        player: { ...state.player, statusEffects: cleaned },
+      };
+      state = pushLog(state, `Negative effects purified!`);
+    }
+  }
+
+  // Transition to enemy turn
+  state = { ...state, phase: 'enemy-turn' };
+  return applyVictoryDefeat(state);
+}
+
+
+export function playerUseItem(state, itemId) {
+  if (state.phase !== 'player-turn') return state;
+
+  if (isStunned(state.player)) {
+    state = pushLog(state, 'Player is stunned!');
+    state = processTurnStart(state, 'enemy');
+    if (state.phase === 'victory' || state.phase === 'defeat') return state;
+    return { ...state, phase: 'enemy-turn' };
+  }
+
+  const item = items[itemId];
+  if (!item) {
+    return pushLog(state, 'Unknown item.');
+  }
+
+  if (item.type !== 'consumable') {
+    return pushLog(state, `${item.name} cannot be used in combat.`);
+  }
+
+  // Check if player has the item in inventory
+  const inventory = state.player.inventory || {};
+  if (!hasItem(inventory, itemId)) {
+    return pushLog(state, `You don't have any ${item.name}.`);
+  }
+
+  // Remove item from inventory
+  const newInventory = removeItemFromInventory(inventory, itemId, 1);
+  state = {
+    ...state,
+    player: { ...state.player, inventory: newInventory, defending: false },
+  };
+
+  const effect = item.effect || {};
+
+  // Handle healing items (potion, hiPotion)
+  const healAmount = effect.heal ?? item.heal;
+  if (healAmount !== undefined && healAmount !== null && healAmount > 0) {
+    const oldHp = state.player.hp;
+    const newHp = clamp(oldHp + healAmount, 0, state.player.maxHp);
+    const actualHeal = newHp - oldHp;
+    state = {
+      ...state,
+      player: { ...state.player, hp: newHp },
+    };
+    state = pushLog(state, `You use ${item.name} and restore ${actualHeal} HP.`);
+  }
+
+  // Handle mana restoration (ether)
+  const manaAmount = effect.mana ?? effect.restoreMP;
+  if (manaAmount !== undefined && manaAmount !== null && manaAmount > 0) {
+    const oldMp = state.player.mp ?? 0;
+    const maxMp = state.player.maxMp ?? 0;
+    const newMp = clamp(oldMp + manaAmount, 0, maxMp);
+    const actualRestore = newMp - oldMp;
+    state = {
+      ...state,
+      player: { ...state.player, mp: newMp },
+    };
+    state = pushLog(state, `You use ${item.name} and restore ${actualRestore} MP.`);
+  }
+
+  // Handle damage items (bomb)
+  if (effect.damage !== undefined && effect.damage > 0) {
+    const damage = effect.damage;
+    const element = effect.element || 'physical';
+    const enemyHp = clamp(state.enemy.hp - damage, 0, state.enemy.maxHp);
+    state = {
+      ...state,
+      enemy: { ...state.enemy, hp: enemyHp },
+    };
+    state = pushLog(state, `You throw ${item.name} for ${damage} ${element} damage!`);
+    state = applyVictoryDefeat(state);
+    if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  }
+
+  // Handle cleanse items (antidote)
+  if (effect.cleanse && Array.isArray(effect.cleanse)) {
+    const currentEffects = state.player.statusEffects ?? [];
+    const cleaned = currentEffects.filter(e => !effect.cleanse.includes(e.type));
+    const removed = currentEffects.length - cleaned.length;
+    state = {
+      ...state,
+      player: { ...state.player, statusEffects: cleaned },
+    };
+    if (removed > 0) {
+      state = pushLog(state, `You use ${item.name} and cure ${effect.cleanse.join(', ')}!`);
+    } else {
+      state = pushLog(state, `You use ${item.name}, but there was nothing to cure.`);
+    }
+  }
+
+  // Transition to enemy turn
+  state = processTurnStart(state, 'enemy');
+  if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  return { ...state, phase: 'enemy-turn' };
 }
 
 export function enemyAct(state) {
@@ -134,12 +428,13 @@ export function enemyAct(state) {
       ...state,
       enemy: { ...state.enemy, defending: true },
       player: { ...state.player, defending: false },
-      phase: 'player-turn',
       turn: state.turn + 1,
     };
     state = pushLog(state, `${state.enemy.name} wiggles defensively.`);
+    state = processTurnStart(state, 'player');
+    if (state.phase === 'victory' || state.phase === 'defeat') return state;
     state = pushLog(state, `Your turn.`);
-    return state;
+    return { ...state, phase: 'player-turn' };
   }
 
   const damage = computeDamage({
@@ -153,12 +448,16 @@ export function enemyAct(state) {
     ...state,
     player: { ...state.player, hp: playerHp, defending: false },
     enemy: { ...state.enemy, defending: false },
-    phase: 'player-turn',
     turn: state.turn + 1,
   };
 
   state = pushLog(state, `${state.enemy.name} slams you for ${damage} damage.`);
   state = applyVictoryDefeat(state);
-  if (state.phase === 'player-turn') state = pushLog(state, `Your turn.`);
-  return state;
+  if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  state = processTurnStart(state, 'player');
+  if (state.phase === 'victory' || state.phase === 'defeat') return state;
+  state = pushLog(state, `Your turn.`);
+  return { ...state, phase: 'player-turn' };
 }
+
+export { getAbilityDisplayInfo };
