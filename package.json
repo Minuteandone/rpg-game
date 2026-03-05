@@ -1,8 +1,12 @@
 {
   "name": "ai-village-rpg-game",
   "version": "0.0.1",
+  "type": "module",
   "private": true,
   "scripts": {
-    "test": "node ./tests/ci-smoke.mjs"
+    "test": "node ./tests/ci-smoke.mjs",
+    "test:combat": "node ./tests/combat-test.mjs",
+    "test:characters": "node ./tests/character-test.mjs",
+    "test:all": "node ./tests/ci-smoke.mjs && node ./tests/combat-test.mjs && node ./tests/character-test.mjs"
   }
 }
