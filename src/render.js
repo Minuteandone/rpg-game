@@ -13,6 +13,7 @@ import { getMinimapStyles, renderMinimap } from './minimap.js';
 import { renderStatsPanel, getStatsPanelStyles } from './stats-display.js';
 import { renderSaveSlotsList, getSaveSlotsStyles } from './save-slots-ui.js';
 import { renderSettingsPanel, getSettingsStyles, attachSettingsHandlers } from './settings-ui.js';
+import { renderQuestRewardScreen, renderQuestRewardActions, attachQuestRewardHandlers, getQuestRewardStyles } from './quest-rewards-ui.js';
 
 function hpLine(entity) {
   const pct = Math.round((entity.hp / entity.maxHp) * 100);
@@ -516,6 +517,25 @@ export function render(state, dispatch) {
   }
 
   // --- Save Slots Phase ---
+
+  // --- Quest Reward Phase ---
+  if (state.phase === 'quest-reward') {
+    const pendingRewards = state.pendingQuestRewards || [];
+    hud.innerHTML = renderQuestRewardScreen(pendingRewards);
+    actions.innerHTML = renderQuestRewardActions();
+
+    // Inject styles if not already present
+    if (!document.getElementById('quest-reward-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'quest-reward-styles';
+      styleEl.textContent = getQuestRewardStyles();
+      document.head.appendChild(styleEl);
+    }
+
+    attachQuestRewardHandlers(dispatch);
+    log.innerHTML = state.log.slice().reverse().map(line => '<div class="logLine">' + esc(line) + '</div>').join('');
+    return;
+  }
 
   // --- Settings Phase ---
   if (state.phase === 'settings') {

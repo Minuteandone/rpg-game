@@ -2,6 +2,7 @@ import { updateAudioSettings } from '../audio-system.js';
 import { createInventoryState, handleInventoryAction } from '../inventory.js';
 import { createLevelUpState, advanceLevelUp } from '../level-up.js';
 import { acceptQuest } from '../quest-integration.js';
+import { claimAllQuestRewards, hasPendingRewards } from '../quest-rewards.js';
 import { createGameStats, recordBattleWon, recordEnemyDefeated, recordXPEarned, recordGoldEarned } from '../game-stats.js';
 import { pushLog } from '../state.js';
 import { getCurrentRoom, getRoomExits } from '../map.js';
@@ -181,6 +182,24 @@ export function handleUIAction(state, action) {
     const returnPhase = state.preDialogPhase || 'exploration';
     const { dialogState: _ds, preDialogPhase: _pdp, ...rest } = state;
     return { ...rest, phase: returnPhase };
+  }
+
+  if (type === 'CLAIM_QUEST_REWARDS') {
+    if (state.phase !== 'quest-reward') return null;
+    const pendingRewards = state.pendingQuestRewards || [];
+    const { playerState, messages } = claimAllQuestRewards(state.player, pendingRewards);
+    const returnPhase = state.preRewardPhase || 'exploration';
+    let next = {
+      ...state,
+      phase: returnPhase,
+      player: playerState,
+      pendingQuestRewards: [],
+      preRewardPhase: undefined,
+    };
+    for (const msg of messages) {
+      next = pushLog(next, msg);
+    }
+    return next;
   }
 
   return null;

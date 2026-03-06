@@ -2,6 +2,7 @@ import { movePlayer, getCurrentRoom, getRoomExits } from '../map.js';
 import { nextRng, startNewEncounter } from '../combat.js';
 import { markRoomVisited } from '../minimap.js';
 import { onRoomEnter } from '../quest-integration.js';
+import { buildPendingRewards, hasPendingRewards } from '../quest-rewards.js';
 import { getNPCsInRoom, createDialogState } from '../npc-dialog.js';
 import { pushLog } from '../state.js';
 
@@ -55,6 +56,12 @@ export function handleExplorationAction(state, action) {
     if (roomId && next.questState) {
       const questResult = onRoomEnter(next.questState, roomId);
       next = { ...next, questState: questResult.questState };
+      // Queue rewards if quests completed
+      const newRewards = buildPendingRewards(questResult.completedQuests);
+      if (newRewards.length > 0) {
+        const existing = next.pendingQuestRewards || [];
+        next = { ...next, pendingQuestRewards: [...existing, ...newRewards] };
+      }
     }
 
     const room = getCurrentRoom(result.worldState);
@@ -78,6 +85,12 @@ export function handleExplorationAction(state, action) {
 
     const exits = getAvailableExits(result.worldState);
     next = pushLog(next, `Exits: ${exits.join(', ') || 'none'}.`);
+
+    // Transition to quest reward phase if rewards pending
+    if (hasPendingRewards(next.pendingQuestRewards)) {
+      return { ...next, phase: 'quest-reward', preRewardPhase: 'exploration' };
+    }
+
     return next;
   }
 
@@ -113,6 +126,12 @@ export function handleExplorationAction(state, action) {
     if (roomId && next.questState) {
       const questResult = onRoomEnter(next.questState, roomId);
       next = { ...next, questState: questResult.questState };
+      // Queue rewards if quests completed
+      const newRewards = buildPendingRewards(questResult.completedQuests);
+      if (newRewards.length > 0) {
+        const existing = next.pendingQuestRewards || [];
+        next = { ...next, pendingQuestRewards: [...existing, ...newRewards] };
+      }
     }
 
     const logs = next.log;
