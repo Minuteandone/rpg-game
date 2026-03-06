@@ -32,8 +32,18 @@ export function handleUIAction(state, action) {
     return { ...state, phase: 'quests', previousPhase: state.phase };
   }
 
+  if (type === 'VIEW_STATS') {
+    if (state.phase === 'class-select') return null;
+    return { ...state, phase: 'stats', previousPhase: state.phase };
+  }
+
   if (type === 'CLOSE_QUESTS') {
     if (state.phase !== 'quests') return null;
+    return { ...state, phase: state.previousPhase || 'exploration' };
+  }
+
+  if (type === 'CLOSE_STATS') {
+    if (state.phase !== 'stats') return null;
     return { ...state, phase: state.previousPhase || 'exploration' };
   }
 

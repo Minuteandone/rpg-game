@@ -5,7 +5,6 @@ import { handleExplorationAction } from './handlers/exploration-handler.js';
 import { handleSystemAction } from './handlers/system-handler.js';
 import { handleUIAction } from './handlers/ui-handler.js';
 import { handleStateTransitions } from './state-transitions.js';
-import { pushLog } from './state.js';
 
 let state = { phase: 'class-select', log: ['Welcome to AI Village RPG! Select your class.'] };
 
