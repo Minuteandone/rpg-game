@@ -534,7 +534,7 @@ export function render(state, dispatch) {
     // Attach handlers
     attachSettingsHandlers(
       settings,
-      (category, key, value) => dispatch({ type: 'UPDATE_SETTING', category, key, value }),
+      (path, value) => dispatch({ type: 'UPDATE_SETTING', path, value }),
       () => dispatch({ type: 'RESET_SETTINGS' })
     );
     

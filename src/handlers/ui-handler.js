@@ -5,7 +5,7 @@ import { createGameStats, recordBattleWon, recordEnemyDefeated, recordXPEarned, 
 import { pushLog } from '../state.js';
 import { getCurrentRoom, getRoomExits } from '../map.js';
 import { advanceDialog } from '../npc-dialog.js';
-import { loadSettings, updateSetting, resetSettings } from '../settings.js';
+import { loadSettings, updateSetting, resetSettings, saveSettings } from '../settings.js';
 
 function getRoomDescription(worldState) {
   const room = getCurrentRoom(worldState);
@@ -29,7 +29,8 @@ export function handleUIAction(state, action) {
 
   if (type === 'UPDATE_SETTING') {
     if (state.phase !== 'settings') return null;
-    const newSettings = updateSetting(action.category, action.key, action.value);
+    const newSettings = updateSetting(state.settings || {}, action.path, action.value);
+    saveSettings(newSettings);
     return { ...state, settings: newSettings };
   }
 
