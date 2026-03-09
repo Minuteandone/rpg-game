@@ -1,3 +1,4 @@
+import { startTavernDice, guessTavernDice, cashOutTavernDice } from '../tavern-dice.js';
 import { updateAudioSettings } from '../audio-system.js';
 import { createInventoryState, handleInventoryAction } from '../inventory.js';
 import { createLevelUpState, advanceLevelUp } from '../level-up.js';
@@ -369,6 +370,24 @@ export function handleUIAction(state, action) {
   if (type === 'CLOSE_BESTIARY') {
     if (state.phase !== 'bestiary') return null;
     return { ...state, phase: state.previousPhase || 'exploration' };
+  }
+  
+  if (type === 'VIEW_TAVERN') {
+    if (state.phase === 'class-select') return null;
+    return { ...state, phase: 'tavern-dice', previousPhase: state.phase };
+  }
+  if (type === 'CLOSE_TAVERN') {
+    if (state.phase !== 'tavern-dice') return null;
+    return { ...state, phase: state.previousPhase || 'exploration' };
+  }
+  if (type === 'TAVERN_START') {
+    return startTavernDice(state, parseInt(action.wager, 10));
+  }
+  if (type === 'TAVERN_GUESS') {
+    return guessTavernDice(state, action.guess);
+  }
+  if (type === 'TAVERN_CASH_OUT') {
+    return cashOutTavernDice(state);
   }
 
   return null;

@@ -1,3 +1,4 @@
+import { renderTavernDicePanel } from './tavern-dice-ui.js';
 import { saveToLocalStorage } from './state.js';
 import { CLASS_DEFINITIONS } from './characters/classes.js';
 import { DEFAULT_WORLD_DATA, getRoomExits } from './map.js';
@@ -250,6 +251,7 @@ export function render(state, dispatch) {
         <button id="btnCrafting">Crafting 🔨</button>
         <button id="btnHelp">Help ❓</button>
         <button id="btnTalents">Talents ⭐</button>
+        <button id="btnTavern">Tavern 🍺</button>
       </div>
     `;
 
@@ -266,6 +268,7 @@ export function render(state, dispatch) {
     document.getElementById('btnCrafting').onclick = () => dispatch({ type: 'VIEW_CRAFTING' });
     document.getElementById('btnTalents').onclick = () => dispatch({ type: 'VIEW_TALENTS' });
     document.getElementById('btnHelp').onclick = () => dispatch({ type: 'TOGGLE_HELP' });
+    document.getElementById('btnTavern').onclick = () => dispatch({ type: 'VIEW_TAVERN' });
 
     hud.querySelectorAll('.npc-talk-btn').forEach((btn) => {
       btn.onclick = () => dispatch({ type: 'TALK_TO_NPC', npcId: btn.dataset.npcid });
@@ -1009,6 +1012,28 @@ export function render(state, dispatch) {
     // Also wire data-action close button from bestiary-ui
     const dataCloseBtn = hud.querySelector('[data-action="close-bestiary"]');
     if (dataCloseBtn) dataCloseBtn.onclick = () => dispatch({ type: 'CLOSE_BESTIARY' });
+    log.innerHTML = state.log.slice().reverse().map(line => '<div class="logLine">' + esc(line) + '</div>').join('');
+    finalizeRender();
+    return;
+  }
+
+  if (state.phase === 'tavern-dice') {
+    hud.innerHTML = renderTavernDicePanel(state);
+    actions.innerHTML = '<div class="buttons"><button id="btnCloseTavern">Leave Tavern</button></div>';
+    
+    const closeBtn = document.getElementById('btnCloseTavern');
+    if (closeBtn) closeBtn.onclick = () => dispatch({ type: 'CLOSE_TAVERN' });
+
+    const btnEls = hud.querySelectorAll('button[data-action]');
+    for (const btn of btnEls) {
+      btn.onclick = () => {
+        dispatch({
+          type: btn.getAttribute('data-action'),
+          wager: btn.getAttribute('data-wager'),
+          guess: btn.getAttribute('data-guess')
+        });
+      };
+    }
     log.innerHTML = state.log.slice().reverse().map(line => '<div class="logLine">' + esc(line) + '</div>').join('');
     finalizeRender();
     return;

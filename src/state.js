@@ -1,3 +1,4 @@
+import { createTavernDiceState } from './tavern-dice.js';
 import { characters } from './data/characters.js';
 import { createCharacter } from './characters/character.js';
 import { CLASS_DEFINITIONS } from './characters/classes.js';
@@ -39,6 +40,7 @@ export function initialState() {
     world: createWorldState(),
     weatherState: createWeatherState(),
     bestiary: createBestiaryState(),
+    tavernDice: createTavernDiceState(),
   };
 }
 
@@ -93,7 +95,9 @@ export function initialStateWithClass(classId) {
       `Your turn.`,
     ],
     world: createWorldState(),
+    weatherState: createWeatherState(),
     bestiary: createBestiaryState(),
+    tavernDice: createTavernDiceState(),
   };
 }
 
