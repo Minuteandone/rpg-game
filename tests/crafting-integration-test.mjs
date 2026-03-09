@@ -10,8 +10,10 @@ const rngAlways = () => 0;
 const rngNever = () => 1;
 
 function makeState(overrides = {}) {
+  const playerInventory = (overrides.player && overrides.player.inventory) || {};
   return {
-    player: { inventory: {}, ...(overrides.player || {}) },
+    inventory: { ...playerInventory, ...(overrides.inventory || {}) },
+    player: { inventory: playerInventory, ...(overrides.player || {}) },
     ...(overrides || {}),
   };
 }
@@ -63,9 +65,9 @@ describe('Crafting Integration', () => {
     it('adds materials to player inventory', () => {
       const state = makeState({ player: { inventory: { herbBundle: 1 } } });
       const result = applyCraftingMaterialDrops(state, [{ level: 1 }], rngAlways);
-      assert.equal(result.state.player.inventory.herbBundle, 2);
-      assert.equal(result.state.player.inventory.ironOre, 1);
-      assert.equal(result.state.player.inventory.beastFang, 1);
+      assert.equal(result.state.inventory.herbBundle, 2);
+      assert.equal(result.state.inventory.ironOre, 1);
+      assert.equal(result.state.inventory.beastFang, 1);
     });
 
     it('uses highest enemy level when multiple enemies', () => {
@@ -104,8 +106,8 @@ describe('Crafting Integration', () => {
     it('handles missing inventory gracefully', () => {
       const state = { player: {} };
       const result = applyCraftingMaterialDrops(state, [{ level: 1 }], rngAlways);
-      assert.ok(result.state.player.inventory);
-      assert.equal(result.state.player.inventory.herbBundle, 1);
+      assert.ok(result.state.inventory);
+      assert.equal(result.state.inventory.herbBundle, 1);
     });
 
     it('returns drops with materialId, quantity, name', () => {
@@ -122,9 +124,9 @@ describe('Crafting Integration', () => {
       const state = makeState();
       const first = applyCraftingMaterialDrops(state, [{ level: 1 }], rngAlways);
       const second = applyCraftingMaterialDrops(first.state, [{ level: 1 }], rngAlways);
-      assert.equal(second.state.player.inventory.herbBundle, 2);
-      assert.equal(second.state.player.inventory.ironOre, 2);
-      assert.equal(second.state.player.inventory.beastFang, 2);
+      assert.equal(second.state.inventory.herbBundle, 2);
+      assert.equal(second.state.inventory.ironOre, 2);
+      assert.equal(second.state.inventory.beastFang, 2);
     });
   });
 
