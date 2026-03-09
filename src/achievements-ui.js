@@ -1,5 +1,5 @@
 // achievements-ui.js - Achievement System UI Rendering
-import { esc } from './util.js';
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 import { 
   getAllAchievements, 
   getAchievementsByCategory, 
