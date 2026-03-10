@@ -10,6 +10,39 @@ import {
   getCompletionPercent,
   getTotalEnemyCount,
 } from './bestiary.js';
+import { getEnemyShieldData, ELEMENT_ICONS, ENEMY_SHIELD_DATABASE } from './shield-break.js';
+
+export function renderShieldInfo(enemyId) {
+  if (!enemyId || !Object.prototype.hasOwnProperty.call(ENEMY_SHIELD_DATABASE, enemyId)) {
+    return '';
+  }
+  const data = getEnemyShieldData(enemyId);
+
+  const renderElements = (elements) => {
+    if (!elements || elements.length === 0) {
+      return 'None';
+    }
+    return elements
+      .map((element) => {
+        const icon = ELEMENT_ICONS[element] || element;
+        return `<span class="bestiary-element-tag bestiary-el-${element}" title="${element}">${icon}</span>`;
+      })
+      .join('');
+  };
+
+  let html = '<div class="bestiary-shield-info">';
+  html += `<div>🛡️ Shields: ${data.shieldCount}${data.breakImmune ? ' (Break Immune)' : ''}</div>`;
+  html += `<div>Weak: ${renderElements(data.weaknesses)}</div>`;
+  if (data.immunities && data.immunities.length > 0) {
+    html += `<div>Immune: ${renderElements(data.immunities)}</div>`;
+  }
+  if (data.absorbs && data.absorbs.length > 0) {
+    html += `<div>Absorbs: ${renderElements(data.absorbs)}</div>`;
+  }
+  html += '</div>';
+
+  return html;
+}
 
 /**
  * Render the bestiary panel as an HTML string.
@@ -68,6 +101,7 @@ export function renderBestiaryPanel(state) {
     }
     html += `</div>`;
     html += `<div class="bestiary-defeats">Defeated: ${entry.timesDefeated} time${entry.timesDefeated !== 1 ? 's' : ''}</div>`;
+    html += renderShieldInfo(entry.id);
     html += `</div>`;
   }
 
